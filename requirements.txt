@@ -1,0 +1,4 @@
+Flask==2.3.3
+pymongo==4.5.0
+Pillow==10.0.0
+exifread==3.0.0

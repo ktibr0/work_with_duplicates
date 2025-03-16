@@ -1,0 +1,33 @@
+# docker/docker-compose.yaml
+version: '3'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ../app:/app/app
+      - /mnt/samba:/mnt/samba
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/photo_duplicates
+      - SECRET_KEY=jmhfshf345fghsdfkgtuyer45gsdfJBHJKHGFxfgd
+    privileged: true  # Необходимо для монтирования
+    cap_add:
+      - SYS_ADMIN  # Для монтирования файловых систем
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

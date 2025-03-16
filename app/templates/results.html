@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<style>
+    .duplicate-card {
+        margin-bottom: 20px;
+    }
+    .duplicate-image {
+        max-width: 100%;
+        height: auto;
+        margin-bottom: 10px;
+    }
+    .file-info {
+        font-size: 0.85rem;
+    }
+    .directory-column {
+        border-left: 1px solid #dee2e6;
+    }
+    .directory-column:first-child {
+        border-left: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <h2>Результаты сканирования</h2>
+        <p>Найдено групп дубликатов: <strong>{{ duplicates|length }}</strong></p>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Новое сканирование</a>
+    </div>
+</div>
+
+<div id="results-container">
+    {% for group in duplicates %}
+    <div class="card duplicate-card">
+        <div class="card-header">
+            <h5>{{ group.filename }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for file in group.files %}
+                <div class="col-md-{{ 12 // directories|length }} directory-column">
+                    <h6>Директория {{ directories[file.directory_index] }}</h6>
+                    {% if file.preview %}
+                    <img src="data:image/jpeg;base64,{{ file.preview }}" class="duplicate-image" alt="{{ file.name }}">
+                    {% else %}
+                    <div class="text-center p-3 bg-light">Превью недоступно</div>
+                    {% endif %}
+                    <div class="file-info">
+                        <p><strong>Имя:</strong> {{ file.name }}</p>
+                        <p><strong>Размер:</strong> {{ (file.size / 1024)|round(2) }} KB</p>
+                        <p><strong>Разрешение:</strong> {{ file.width }}x{{ file.height }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        Дубликаты не найдены
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    $(document).ready(function() {
+        // Здесь будут дополнительные скрипты для интерактивности
+    });
+</script>
+{% endblock %}
