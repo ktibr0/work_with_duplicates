@@ -39,6 +39,10 @@ class Database:
         Returns:
             int: Количество сохраненных групп
         """
+        # # Преобразуем строку в ObjectId, если необходимо
+        # if isinstance(session_id, str) and len(session_id) == 24:
+            # session_id = ObjectId(session_id)
+            
         # Обновляем статус сессии
         self.db.scan_sessions.update_one(
             {'_id': session_id},

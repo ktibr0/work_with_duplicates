@@ -63,7 +63,7 @@ def scan_directories():
         # Создаем новую сессию сканирования
         db_session_id = db.save_scan_session(directories)
         session['db_session_id'] = str(db_session_id)
-        
+     
         # Выполняем сканирование директорий
         duplicates = file_scanner.scan_directories(mounted_dirs)
         
@@ -110,6 +110,7 @@ def scan_directories():
         except Exception as e:
             logger.error(f"Ошибка при размонтировании ресурсов: {e}")
 
+@app.route('/results/<session_id>')
 @app.route('/results/<session_id>')
 def view_results(session_id):
     """Просмотр результатов предыдущего сканирования"""
@@ -200,6 +201,7 @@ def delete_files():
         return redirect(url_for('view_results', session_id=session_id))
 
 @app.route('/compare_exif/<group_id>')
+
 def compare_exif(group_id):
     """API для сравнения EXIF-метаданных между файлами одной группы"""
     try:
