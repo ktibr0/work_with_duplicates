@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block extra_head %}
 <style>
     .duplicate-card {
@@ -19,9 +18,47 @@
     .directory-column:first-child {
         border-left: none;
     }
+    .exif-info {
+        margin-top: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 10px;
+        font-size: 0.8rem;
+    }
+    .exif-info h6 {
+        margin-bottom: 10px;
+        font-weight: bold;
+    }
+    .exif-table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .exif-table td, .exif-table th {
+        padding: 4px;
+        vertical-align: top;
+    }
+    .exif-tag {
+        font-weight: bold;
+    }
+    .exif-diff {
+        background-color: #fff3cd;
+    }
+    .exif-toggle {
+        cursor: pointer;
+        margin-top: 8px;
+        display: inline-block;
+        font-size: 0.85rem;
+        color: #0d6efd;
+    }
+    .exif-toggle:hover {
+        text-decoration: underline;
+    }
+    .map-link {
+        margin-left: 5px;
+        font-size: 0.8rem;
+    }
 </style>
 {% endblock %}
-
 {% block content %}
 <div class="row mb-3">
     <div class="col-md-12">
@@ -30,7 +67,6 @@
         <a href="{{ url_for('index') }}" class="btn btn-secondary">Новое сканирование</a>
     </div>
 </div>
-
 <div id="results-container">
     {% for group in duplicates %}
     <div class="card duplicate-card">
@@ -52,9 +88,46 @@
                         <p><strong>Размер:</strong> {{ (file.size / 1024)|round(2) }} KB</p>
                         <p><strong>Разрешение:</strong> {{ file.width }}x{{ file.height }}</p>
                     </div>
+                    
+                    <!-- EXIF данные с возможностью свернуть/развернуть -->
+                    <div class="exif-section">
+                        <span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+                            <i class="bi bi-info-circle"></i> Показать EXIF данные
+                        </span>
+                        <div class="collapse exif-info" id="exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+                            <h6>EXIF метаданные</h6>
+                            {% if file.exif_display and file.exif_display|length > 0 %}
+                            <table class="exif-table">
+                                <tbody>
+                                    {% for tag, value in file.exif_display.items() %}
+                                    <tr>
+                                        <td class="exif-tag" width="40%">{{ tag }}</td>
+                                        <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag|lower in group.exif_differences %} exif-diff{% endif %}">
+                                            {% if tag == 'Ссылка на карту' and value.startswith('https://') %}
+                                            <a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
+                                            {% else %}
+                                            {{ value }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% else %}
+                            <p class="text-muted">Нет доступных EXIF данных</p>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
+            
+            <!-- Если есть различия в EXIF, отображаем сообщение -->
+            {% if group.exif_differences and group.files|length > 1 %}
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle-fill"></i> Обнаружены различия в EXIF метаданных (поля с желтой подсветкой)
+            </div>
+            {% endif %}
         </div>
     </div>
     {% else %}
@@ -64,11 +137,18 @@
     {% endfor %}
 </div>
 {% endblock %}
-
 {% block extra_scripts %}
 <script>
     $(document).ready(function() {
-        // Здесь будут дополнительные скрипты для интерактивности
+        // Изменяем текст при нажатии на кнопку показа/скрытия EXIF
+        $('.exif-toggle').on('click', function() {
+            let target = $(this).data('bs-target');
+            if ($(target).hasClass('show')) {
+                $(this).html('<i class="bi bi-info-circle"></i> Показать EXIF данные');
+            } else {
+                $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
+            }
+        });
     });
 </script>
 {% endblock %}
