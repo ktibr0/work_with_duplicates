@@ -91,10 +91,12 @@
                     
                     <!-- EXIF данные с возможностью свернуть/развернуть -->
                     <div class="exif-section">
-                        <span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+                        #<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+						<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ forloop.counter }}">
                             <i class="bi bi-info-circle"></i> Показать EXIF данные
                         </span>
-                        <div class="collapse exif-info" id="exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+                        #<div class="collapse exif-info" id="exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
+						<div class="collapse exif-info" id="exif-{{ loop.index }}-{{ forloop.counter }}">
                             <h6>EXIF метаданные</h6>
                             {% if file.exif_display and file.exif_display|length > 0 %}
                             <table class="exif-table">
