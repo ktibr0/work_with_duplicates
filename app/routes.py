@@ -26,17 +26,13 @@ def scan_directories():
         dir_path = request.form.get(f'directory{i}')
         if dir_path and dir_path.strip():
             directories.append(dir_path.strip())
-    
     if not directories:
         flash('Необходимо указать хотя бы одну директорию', 'danger')
         return redirect(url_for('index'))
-    
     username = request.form.get('username')
     password = request.form.get('password')
-    
     session_id = str(uuid.uuid4())
     session['scan_session_id'] = session_id
-    
     mounted_dirs = []
     try:
         for dir_path in directories:
@@ -50,22 +46,19 @@ def scan_directories():
                     return redirect(url_for('index'))
             else:
                 mounted_dirs.append(dir_path)
-        
         db_session_id = db.save_scan_session(directories)
         session['db_session_id'] = str(db_session_id)
-        
         duplicates = file_scanner.scan_directories(mounted_dirs)
         processed_duplicates = []
-        
-        for filename, files in duplicates.items():
+        for group_idx, (filename, files) in enumerate(duplicates.items()):
             exif_differences = {}
             if len(files) > 1:
                 exif_differences = file_scanner.compare_duplicates(files)
             
-            for file in files:
+            for file_idx, file in enumerate(files):
                 file['preview'] = file_scanner.generate_preview(file['path'])
-                # Добавление человекочитаемых названий EXIF-тегов
                 file['exif_display'] = {}
+                file['exif_id'] = f"exif-{group_idx}-{file_idx}"  # Add unique ID for each file's EXIF data
                 for key, value in file['exif'].items():
                     display_name = exif_parser.get_exif_display_name(key)
                     file['exif_display'][display_name] = value
@@ -73,11 +66,11 @@ def scan_directories():
             processed_duplicates.append({
                 'filename': filename,
                 'files': files,
-                'exif_differences': exif_differences
+                'exif_differences': exif_differences,
+                'group_id': group_idx  # Add group ID
             })
         
         db.save_duplicates(db_session_id, {filename: files for filename, files in duplicates.items()})
-        
         return render_template('results.html', 
                               duplicates=processed_duplicates,
                               directories=directories,
@@ -99,36 +92,33 @@ def view_results(session_id):
         if not session_info:
             flash('Сессия не найдена', 'danger')
             return redirect(url_for('index'))
-        
         duplicate_groups = list(db.db.duplicate_groups.find({'session_id': session_id}))
         processed_duplicates = []
         
-        for group in duplicate_groups:
+        for group_idx, group in enumerate(duplicate_groups):
             files = group['files']
             valid_files = []
             
-            for file in files:
+            for file_idx, file in enumerate(files):
                 if os.path.exists(file['path']):
                     if 'preview' not in file or not file['preview']:
                         file['preview'] = file_scanner.generate_preview(file['path'])
-                    
-                    # Добавление человекочитаемых названий EXIF-тегов
                     file['exif_display'] = {}
+                    file['exif_id'] = f"exif-{group_idx}-{file_idx}"  # Add unique ID for each file's EXIF data
                     for key, value in file['exif'].items():
                         display_name = exif_parser.get_exif_display_name(key)
                         file['exif_display'][display_name] = value
-                    
                     valid_files.append(file)
             
             if valid_files:
                 exif_differences = {}
                 if len(valid_files) > 1:
                     exif_differences = file_scanner.compare_duplicates(valid_files)
-                
                 processed_duplicates.append({
                     'filename': group['filename'],
                     'files': valid_files,
-                    'exif_differences': exif_differences
+                    'exif_differences': exif_differences,
+                    'group_id': group_idx  # Add group ID
                 })
         
         return render_template('results.html', 

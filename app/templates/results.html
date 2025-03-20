@@ -90,36 +90,40 @@
                     </div>
                     
                     <!-- EXIF данные с возможностью свернуть/развернуть -->
-                    <div class="exif-section">
-                        #<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
-						<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#exif-{{ loop.index }}-{{ forloop.counter }}">
-                            <i class="bi bi-info-circle"></i> Показать EXIF данные
-                        </span>
-                        #<div class="collapse exif-info" id="exif-{{ loop.index }}-{{ loop.parent.loop.index }}">
-						<div class="collapse exif-info" id="exif-{{ loop.index }}-{{ forloop.counter }}">
-                            <h6>EXIF метаданные</h6>
-                            {% if file.exif_display and file.exif_display|length > 0 %}
-                            <table class="exif-table">
-                                <tbody>
-                                    {% for tag, value in file.exif_display.items() %}
-                                    <tr>
-                                        <td class="exif-tag" width="40%">{{ tag }}</td>
-                                        <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag|lower in group.exif_differences %} exif-diff{% endif %}">
-                                            {% if tag == 'Ссылка на карту' and value.startswith('https://') %}
-                                            <a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
-                                            {% else %}
-                                            {{ value }}
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                            {% else %}
-                            <p class="text-muted">Нет доступных EXIF данных</p>
-                            {% endif %}
-                        </div>
-                    </div>
+					<!-- Replace the EXIF toggle and info sections with this code -->
+					<div class="exif-section">
+						<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#{{ file.exif_id }}">
+							<i class="bi bi-info-circle"></i> Показать EXIF данные
+						</span>
+
+						<div class="collapse exif-info" id="{{ file.exif_id }}">
+							<h6>EXIF метаданные</h6>
+							{% if file.exif_display and file.exif_display|length > 0 %}
+							<table class="exif-table">
+								<tbody>
+									{% for tag, value in file.exif_display.items() %}
+									<tr>
+										<td class="exif-tag" width="40%">{{ tag }}</td>
+										
+										<!-- <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag|lower in group.exif_differences %} exif-diff{% endif %}"> -->
+										
+										<td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}">
+										
+											{% if tag == 'Ссылка на карту' and value.startswith('https://') %}
+											<a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
+											{% else %}
+											{{ value }}
+											{% endif %}
+										</td>
+									</tr>
+									{% endfor %}
+								</tbody>
+							</table>
+							{% else %}
+							<p class="text-muted">Нет доступных EXIF данных</p>
+							{% endif %}
+						</div>
+					</div>
                 </div>
                 {% endfor %}
             </div>
