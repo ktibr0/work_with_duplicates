@@ -7,6 +7,7 @@ from app.models import Database
 import logging
 import os
 import uuid
+import datetime  # Добавьте этот импорт
 from bson.objectid import ObjectId
 
 samba_mounter = SambaMounter()
@@ -121,28 +122,31 @@ def view_results(session_id):
                     file['marked_for_deletion'] = file['path'] in marked_files
                     
                     valid_files.append(file)
-            
             if valid_files:
                 exif_differences = {}
+                # В функции view_results, где обрабатываются exif_differences
                 exif_diff_tags = set()
-                
                 if len(valid_files) > 1:
-                    # Анализируем различия в EXIF
                     exif_data = [file['exif'] for file in valid_files]
                     for i in range(len(exif_data)):
                         for j in range(i+1, len(exif_data)):
                             differences = exif_parser.compare_exif(exif_data[i], exif_data[j])
                             for key in differences:
                                 exif_diff_tags.add(key)
-                                display_key = exif_parser.get_exif_display_name(key)
-                                exif_differences[display_key] = True
-                
+                                
+                # Создаем список различающихся отображаемых имен тегов
+                displayed_diff_tags = [exif_parser.get_exif_display_name(tag) for tag in exif_diff_tags]
                 processed_duplicates.append({
                     'filename': group['filename'],
                     'files': valid_files,
-                    'exif_differences': exif_differences,
+                    'exif_differences': displayed_diff_tags,  # Используем список имен тегов
                     'group_id': group_idx
                 })
+
+
+
+
+
         
         return render_template('results.html', 
                               duplicates=processed_duplicates, 

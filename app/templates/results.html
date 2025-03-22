@@ -146,7 +146,12 @@
                                         {% for tag, value in file.exif_display.items() %}
                                         <tr>
                                             <td class="exif-tag" width="40%">{{ tag }}</td>
-                                            <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}">
+                                           <!--  <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}"> -->
+											<td class="exif-value{% if group.exif_differences and tag in group.exif_differences %} exif-diff{% endif %}">
+											
+											
+											
+											
                                                 {% if tag == 'Ссылка на карту' and value.startswith('https://') %}
                                                 <a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
                                                 {% else %}
