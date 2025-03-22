@@ -1,3 +1,4 @@
+<!-- Обновление файла app/templates/results.html -->
 {% extends "base.html" %}
 {% block extra_head %}
 <style>
@@ -14,6 +15,7 @@
     }
     .directory-column {
         border-left: 1px solid #dee2e6;
+        position: relative;
     }
     .directory-column:first-child {
         border-left: none;
@@ -57,6 +59,27 @@
         margin-left: 5px;
         font-size: 0.8rem;
     }
+    .delete-checkbox {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        transform: scale(1.5);
+        z-index: 10;
+    }
+    .delete-checkbox-label {
+        background-color: rgba(255, 255, 255, 0.7);
+        border-radius: 3px;
+        padding: 3px 6px;
+    }
+    .btn-delete-wrapper {
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    .delete-warning {
+        font-size: 0.9rem;
+        color: #dc3545;
+        margin-top: 5px;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -67,86 +90,121 @@
         <a href="{{ url_for('index') }}" class="btn btn-secondary">Новое сканирование</a>
     </div>
 </div>
-<div id="results-container">
-    {% for group in duplicates %}
-    <div class="card duplicate-card">
-        <div class="card-header">
-            <h5>{{ group.filename }}</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                {% for file in group.files %}
-                <div class="col-md-{{ 12 // directories|length }} directory-column">
-                    <h6>Директория {{ directories[file.directory_index] }}</h6>
-                    {% if file.preview %}
-                    <img src="data:image/jpeg;base64,{{ file.preview }}" class="duplicate-image" alt="{{ file.name }}">
-                    {% else %}
-                    <div class="text-center p-3 bg-light">Превью недоступно</div>
-                    {% endif %}
-                    <div class="file-info">
-                        <p><strong>Имя:</strong> {{ file.name }}</p>
-                        <p><strong>Размер:</strong> {{ (file.size / 1024)|round(2) }} KB</p>
-                        <p><strong>Разрешение:</strong> {{ file.width }}x{{ file.height }}</p>
-                    </div>
-                    
-                    <!-- EXIF данные с возможностью свернуть/развернуть -->
-					<!-- Replace the EXIF toggle and info sections with this code -->
-					<div class="exif-section">
-						<span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#{{ file.exif_id }}">
-							<i class="bi bi-info-circle"></i> Показать EXIF данные
-						</span>
 
-						<div class="collapse exif-info" id="{{ file.exif_id }}">
-							<h6>EXIF метаданные</h6>
-							{% if file.exif_display and file.exif_display|length > 0 %}
-							<table class="exif-table">
-								<tbody>
-									{% for tag, value in file.exif_display.items() %}
-									<tr>
-										<td class="exif-tag" width="40%">{{ tag }}</td>
-										
-										<!-- <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag|lower in group.exif_differences %} exif-diff{% endif %}"> -->
-										
-										<td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}">
-										
-											{% if tag == 'Ссылка на карту' and value.startswith('https://') %}
-											<a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
-											{% else %}
-											{{ value }}
-											{% endif %}
-										</td>
-									</tr>
-									{% endfor %}
-								</tbody>
-							</table>
-							{% else %}
-							<p class="text-muted">Нет доступных EXIF данных</p>
-							{% endif %}
-						</div>
-					</div>
+<form id="mark-deletion-form" method="POST" action="{{ url_for('mark_for_deletion') }}">
+    <input type="hidden" name="session_id" value="{{ session_id }}">
+    
+    <div class="btn-delete-wrapper">
+        <button type="submit" class="btn btn-warning" id="mark-deletion-btn">
+            <i class="bi bi-bookmark-check"></i> Отметить выбранные на удаление
+        </button>
+    </div>
+
+    <div id="results-container">
+        {% for group in duplicates %}
+        <div class="card duplicate-card" data-group-id="{{ group.group_id }}">
+            <div class="card-header">
+                <h5>{{ group.filename }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for file in group.files %}
+                    <div class="col-md-{{ 12 // directories|length }} directory-column">
+                        <div class="form-check">
+                            <input type="checkbox" 
+                                class="form-check-input delete-checkbox" 
+                                id="delete-{{ group.group_id }}-{{ loop.index0 }}" 
+                                name="marked_files" 
+                                value="{{ file.path }}"
+                                data-group="{{ group.group_id }}"
+                                {% if file.marked_for_deletion %}checked{% endif %}>
+                            <label class="form-check-label delete-checkbox-label" for="delete-{{ group.group_id }}-{{ loop.index0 }}">
+                                Удалить
+                            </label>
+                        </div>
+                        <h6>Директория {{ directories[file.directory_index] }}</h6>
+                        {% if file.preview %}
+                        <img src="data:image/jpeg;base64,{{ file.preview }}" class="duplicate-image" alt="{{ file.name }}">
+                        {% else %}
+                        <div class="text-center p-3 bg-light">Превью недоступно</div>
+                        {% endif %}
+                        <div class="file-info">
+                            <p><strong>Имя:</strong> {{ file.name }}</p>
+                            <p><strong>Размер:</strong> {{ (file.size / 1024)|round(2) }} KB</p>
+                            <p><strong>Разрешение:</strong> {{ file.width }}x{{ file.height }}</p>
+                        </div>
+                        <!-- EXIF данные с возможностью свернуть/развернуть -->
+                        <div class="exif-section">
+                            <span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#{{ file.exif_id }}">
+                                <i class="bi bi-info-circle"></i> Показать EXIF данные
+                            </span>
+                            <div class="collapse exif-info" id="{{ file.exif_id }}">
+                                <h6>EXIF метаданные</h6>
+                                {% if file.exif_display and file.exif_display|length > 0 %}
+                                <table class="exif-table">
+                                    <tbody>
+                                        {% for tag, value in file.exif_display.items() %}
+                                        <tr>
+                                            <td class="exif-tag" width="40%">{{ tag }}</td>
+                                            <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}">
+                                                {% if tag == 'Ссылка на карту' and value.startswith('https://') %}
+                                                <a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
+                                                {% else %}
+                                                {{ value }}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% else %}
+                                <p class="text-muted">Нет доступных EXIF данных</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+                <!-- Если есть различия в EXIF, отображаем сообщение -->
+                {% if group.exif_differences and group.files|length > 1 %}
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Обнаружены различия в EXIF метаданных (поля с желтой подсветкой)
+                </div>
+                {% endif %}
+                
+                <div class="delete-warning mt-2">
+                    <i class="bi bi-exclamation-triangle-fill"></i> 
+                    Выберите фото для удаления (не более {{ group.files|length - 1 }} из {{ group.files|length }})
+                </div>
             </div>
-            
-            <!-- Если есть различия в EXIF, отображаем сообщение -->
-            {% if group.exif_differences and group.files|length > 1 %}
-            <div class="alert alert-warning mt-3">
-                <i class="bi bi-exclamation-triangle-fill"></i> Обнаружены различия в EXIF метаданных (поля с желтой подсветкой)
-            </div>
-            {% endif %}
         </div>
+        {% else %}
+        <div class="alert alert-info">
+            Дубликаты не найдены
+        </div>
+        {% endfor %}
     </div>
-    {% else %}
-    <div class="alert alert-info">
-        Дубликаты не найдены
+</form>
+
+<div class="btn-delete-wrapper" id="final-delete-section" style="display: none;">
+    <hr>
+    <div class="alert alert-danger">
+        <h4><i class="bi bi-exclamation-triangle-fill"></i> Внимание!</h4>
+        <p>Вы отметили <span id="marked-count">0</span> файлов на удаление. Это действие невозможно отменить.</p>
     </div>
-    {% endfor %}
+    <form id="delete-form" method="POST" action="{{ url_for('delete_files') }}">
+        <input type="hidden" name="session_id" value="{{ session_id }}">
+        <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash"></i> Удалить отмеченные файлы безвозвратно
+        </button>
+    </form>
 </div>
 {% endblock %}
+
 {% block extra_scripts %}
 <script>
     $(document).ready(function() {
-        // Изменяем текст при нажатии на кнопку показа/скрытия EXIF
+        // Обработка открытия/закрытия EXIF данных
         $('.exif-toggle').on('click', function() {
             let target = $(this).data('bs-target');
             if ($(target).hasClass('show')) {
@@ -154,6 +212,44 @@
             } else {
                 $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
             }
+        });
+        
+        // Проверка количества выбранных чекбоксов в группе
+        $('.delete-checkbox').on('change', function() {
+            const groupId = $(this).data('group');
+            const checkboxes = $(`input[data-group="${groupId}"]:checked`);
+            const totalFiles = $(`input[data-group="${groupId}"]`).length;
+            
+            // Если выбраны все файлы в группе, снимаем выбор с текущего
+            if (checkboxes.length >= totalFiles) {
+                $(this).prop('checked', false);
+                alert('Нельзя отметить все файлы в группе на удаление. Должен остаться хотя бы один файл.');
+                return;
+            }
+        });
+        
+        // Проверка наличия отмеченных на удаление файлов
+        function checkMarkedFiles() {
+            // Если уже есть файлы, отмеченные в БД
+            var hasMarkedFiles = {{ marked_count|default(0) }} > 0;
+            
+            // Если отмечены текущие чекбоксы
+            var hasCheckedBoxes = $('.delete-checkbox:checked').length > 0;
+            
+            if (hasMarkedFiles || hasCheckedBoxes) {
+                $('#final-delete-section').show();
+                $('#marked-count').text({{ marked_count|default(0) }});
+            } else {
+                $('#final-delete-section').hide();
+            }
+        }
+        
+        // Запускаем проверку при загрузке страницы
+        checkMarkedFiles();
+        
+        // Обновляем состояние при изменении чекбоксов
+        $('.delete-checkbox').on('change', function() {
+            checkMarkedFiles();
         });
     });
 </script>

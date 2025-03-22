@@ -82,3 +82,37 @@ class Database:
             list: Список групп дубликатов
         """
         return list(self.db.duplicate_groups.find({'session_id': session_id}))
+
+
+# Добавить в app/models.py
+
+def save_marked_files(self, session_id, files):
+    """
+    Сохраняет список файлов, отмеченных на удаление
+    """
+    result = self.db.marked_files.update_one(
+        {'session_id': session_id},
+        {
+            '$set': {
+                'files': files,
+                'updated_at': datetime.datetime.utcnow()
+            }
+        },
+        upsert=True
+    )
+    return result
+
+def get_marked_files(self, session_id):
+    """
+    Получает список файлов, отмеченных на удаление
+    """
+    doc = self.db.marked_files.find_one({'session_id': session_id})
+    if doc:
+        return doc.get('files', [])
+    return []
+
+def clear_marked_files(self, session_id):
+    """
+    Очищает список файлов, отмеченных на удаление
+    """
+    return self.db.marked_files.delete_one({'session_id': session_id})        

@@ -88,17 +88,29 @@ class ExifParser:
         s = float(value.values[2].num) / float(value.values[2].den)
         return d + (m / 60.0) + (s / 3600.0)
     
+    
+    
+    # Обновление в app/utils/exif_parser.py
+
     def compare_exif(self, exif1, exif2):
-        differences = {}
+        differences = set()
         all_keys = set(exif1.keys()) | set(exif2.keys())
+        
+        # Исключаем некоторые технические теги, различия в которых не так важны
+        excluded_keys = {'Software', 'XResolution', 'YResolution'}
+        all_keys = all_keys - excluded_keys
+        
         for key in all_keys:
             if key not in exif1:
-                differences[key] = {'file1': None, 'file2': exif2[key]}
+                differences.add(key)
             elif key not in exif2:
-                differences[key] = {'file1': exif1[key], 'file2': None}
+                differences.add(key)
             elif exif1[key] != exif2[key]:
-                differences[key] = {'file1': exif1[key], 'file2': exif2[key]}
+                differences.add(key)
+        
         return differences
+    
+
     
     def get_exif_display_name(self, tag_key):
         """Возвращает человекочитаемые названия EXIF-тегов"""

@@ -92,6 +92,12 @@ def view_results(session_id):
         if not session_info:
             flash('Сессия не найдена', 'danger')
             return redirect(url_for('index'))
+        
+        # Получаем список отмеченных на удаление файлов
+        marked_files_doc = db.db.marked_files.find_one({'session_id': session_id})
+        marked_files = marked_files_doc.get('files', []) if marked_files_doc else []
+        marked_count = len(marked_files)
+        
         duplicate_groups = list(db.db.duplicate_groups.find({'session_id': session_id}))
         processed_duplicates = []
         
@@ -103,65 +109,52 @@ def view_results(session_id):
                 if os.path.exists(file['path']):
                     if 'preview' not in file or not file['preview']:
                         file['preview'] = file_scanner.generate_preview(file['path'])
+                    
                     file['exif_display'] = {}
-                    file['exif_id'] = f"exif-{group_idx}-{file_idx}"  # Add unique ID for each file's EXIF data
+                    file['exif_id'] = f"exif-{group_idx}-{file_idx}"
+                    
                     for key, value in file['exif'].items():
                         display_name = exif_parser.get_exif_display_name(key)
                         file['exif_display'][display_name] = value
+                    
+                    # Отмечаем, выбран ли файл на удаление
+                    file['marked_for_deletion'] = file['path'] in marked_files
+                    
                     valid_files.append(file)
             
             if valid_files:
                 exif_differences = {}
+                exif_diff_tags = set()
+                
                 if len(valid_files) > 1:
-                    exif_differences = file_scanner.compare_duplicates(valid_files)
+                    # Анализируем различия в EXIF
+                    exif_data = [file['exif'] for file in valid_files]
+                    for i in range(len(exif_data)):
+                        for j in range(i+1, len(exif_data)):
+                            differences = exif_parser.compare_exif(exif_data[i], exif_data[j])
+                            for key in differences:
+                                exif_diff_tags.add(key)
+                                display_key = exif_parser.get_exif_display_name(key)
+                                exif_differences[display_key] = True
+                
                 processed_duplicates.append({
                     'filename': group['filename'],
                     'files': valid_files,
                     'exif_differences': exif_differences,
-                    'group_id': group_idx  # Add group ID
+                    'group_id': group_idx
                 })
         
         return render_template('results.html', 
                               duplicates=processed_duplicates, 
                               directories=session_info['directories'],
-                              session_id=session_id)
+                              session_id=session_id,
+                              marked_count=marked_count)
     except Exception as e:
         logger.error(f"Ошибка при загрузке результатов: {e}")
         flash(f'Произошла ошибка: {e}', 'danger')
         return redirect(url_for('index'))
 
-@app.route('/delete_files', methods=['POST'])
-def delete_files():
-    if request.method == 'POST':
-        files_to_delete = request.form.getlist('delete_files')
-        session_id = request.form.get('session_id')
-        
-        if not files_to_delete:
-            flash('Не выбрано ни одного файла для удаления', 'warning')
-            return redirect(url_for('view_results', session_id=session_id))
-        
-        deleted_count = 0
-        error_count = 0
-        
-        for file_path in files_to_delete:
-            try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    deleted_count += 1
-                    db.db.duplicate_groups.update_many(
-                        {'files.path': file_path},
-                        {'$pull': {'files': {'path': file_path}}}
-                    )
-            except Exception as e:
-                logger.error(f"Ошибка при удалении файла {file_path}: {e}")
-                error_count += 1
-        
-        if deleted_count > 0:
-            flash(f'Успешно удалено файлов: {deleted_count}', 'success')
-        if error_count > 0:
-            flash(f'Не удалось удалить файлов: {error_count}', 'danger')
-        
-        return redirect(url_for('view_results', session_id=session_id))
+
 
 @app.route('/compare_exif/<group_id>')
 def compare_exif(group_id):
@@ -198,3 +191,83 @@ def compare_exif(group_id):
     except Exception as e:
         logger.error(f"Ошибка при сравнении EXIF: {e}")
         return jsonify({'error': str(e)}), 500
+# Добавить после существующих импортов в app/routes.py
+
+@app.route('/mark_for_deletion', methods=['POST'])
+def mark_for_deletion():
+    if request.method == 'POST':
+        marked_files = request.form.getlist('marked_files')
+        session_id = request.form.get('session_id')
+        
+        if not session_id:
+            flash('Идентификатор сессии не найден', 'danger')
+            return redirect(url_for('index'))
+        
+        if not marked_files:
+            flash('Не выбрано ни одного файла для удаления', 'warning')
+            return redirect(url_for('view_results', session_id=session_id))
+        
+        # Создаем или обновляем запись о файлах, отмеченных на удаление
+        result = db.db.marked_files.update_one(
+            {'session_id': session_id},
+            {'$set': {
+                'session_id': session_id,
+                'files': marked_files,
+                'updated_at': datetime.datetime.utcnow()
+            }},
+            upsert=True
+        )
+        
+        # Сохраняем в сессии, что у нас есть отмеченные файлы
+        session['has_marked_files'] = True
+        
+        flash(f'Отмечено {len(marked_files)} файлов на удаление', 'success')
+        return redirect(url_for('view_results', session_id=session_id))
+
+
+@app.route('/delete_files', methods=['POST'])
+def delete_files():
+    if request.method == 'POST':
+        session_id = request.form.get('session_id')
+        
+        if not session_id:
+            flash('Идентификатор сессии не найден', 'danger')
+            return redirect(url_for('index'))
+        
+        # Получаем список файлов, отмеченных на удаление
+        marked_files_doc = db.db.marked_files.find_one({'session_id': session_id})
+        
+        if not marked_files_doc or not marked_files_doc.get('files'):
+            flash('Нет файлов, отмеченных на удаление', 'warning')
+            return redirect(url_for('view_results', session_id=session_id))
+        
+        files_to_delete = marked_files_doc.get('files', [])
+        
+        deleted_count = 0
+        error_count = 0
+        
+        for file_path in files_to_delete:
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    deleted_count += 1
+                    
+                    # Удаляем файл из документов с дубликатами
+                    db.db.duplicate_groups.update_many(
+                        {'session_id': session_id, 'files.path': file_path},
+                        {'$pull': {'files': {'path': file_path}}}
+                    )
+            except Exception as e:
+                logger.error(f"Ошибка при удалении файла {file_path}: {e}")
+                error_count += 1
+        
+        # Очищаем список отмеченных файлов
+        db.db.marked_files.delete_one({'session_id': session_id})
+        session.pop('has_marked_files', None)
+        
+        if deleted_count > 0:
+            flash(f'Успешно удалено файлов: {deleted_count}', 'success')
+        if error_count > 0:
+            flash(f'Не удалось удалить файлов: {error_count}', 'danger')
+        
+        return redirect(url_for('view_results', session_id=session_id))        
