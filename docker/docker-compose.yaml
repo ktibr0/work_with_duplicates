@@ -14,9 +14,9 @@ services:
     environment:
       - MONGO_URI=mongodb://mongodb:27017/photo_duplicates
       - SECRET_KEY=jmhfshf345fghsdfkgtuyer45gsdfJBHJKHGFxfgd
-    privileged: true  # Необходимо для монтирования
+    privileged: true  
     cap_add:
-      - SYS_ADMIN  # Для монтирования файловых систем
+      - SYS_ADMIN  
     depends_on:
       - mongodb
     restart: unless-stopped

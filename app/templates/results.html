@@ -1,4 +1,3 @@
-<!-- Обновление файла app/templates/results.html -->
 {% extends "base.html" %}
 {% block extra_head %}
 <style>
@@ -90,16 +89,13 @@
         <a href="{{ url_for('index') }}" class="btn btn-secondary">Новое сканирование</a>
     </div>
 </div>
-
 <form id="mark-deletion-form" method="POST" action="{{ url_for('mark_for_deletion') }}">
     <input type="hidden" name="session_id" value="{{ session_id }}">
-    
     <div class="btn-delete-wrapper">
         <button type="submit" class="btn btn-warning" id="mark-deletion-btn">
             <i class="bi bi-bookmark-check"></i> Отметить выбранные на удаление
         </button>
     </div>
-
     <div id="results-container">
         {% for group in duplicates %}
         <div class="card duplicate-card" data-group-id="{{ group.group_id }}">
@@ -133,7 +129,6 @@
                             <p><strong>Размер:</strong> {{ (file.size / 1024)|round(2) }} KB</p>
                             <p><strong>Разрешение:</strong> {{ file.width }}x{{ file.height }}</p>
                         </div>
-                        <!-- EXIF данные с возможностью свернуть/развернуть -->
                         <div class="exif-section">
                             <span class="exif-toggle" data-bs-toggle="collapse" data-bs-target="#{{ file.exif_id }}">
                                 <i class="bi bi-info-circle"></i> Показать EXIF данные
@@ -146,12 +141,7 @@
                                         {% for tag, value in file.exif_display.items() %}
                                         <tr>
                                             <td class="exif-tag" width="40%">{{ tag }}</td>
-                                           <!--  <td class="exif-value{% if group.exif_differences and group.files|length > 1 and tag in group.exif_differences %} exif-diff{% endif %}"> -->
 											<td class="exif-value{% if group.exif_differences and tag in group.exif_differences %} exif-diff{% endif %}">
-											
-											
-											
-											
                                                 {% if tag == 'Ссылка на карту' and value.startswith('https://') %}
                                                 <a href="{{ value }}" target="_blank">Открыть на карте <i class="bi bi-box-arrow-up-right"></i></a>
                                                 {% else %}
@@ -170,13 +160,11 @@
                     </div>
                     {% endfor %}
                 </div>
-                <!-- Если есть различия в EXIF, отображаем сообщение -->
                 {% if group.exif_differences and group.files|length > 1 %}
                 <div class="alert alert-warning mt-3">
                     <i class="bi bi-exclamation-triangle-fill"></i> Обнаружены различия в EXIF метаданных (поля с желтой подсветкой)
                 </div>
                 {% endif %}
-                
                 <div class="delete-warning mt-2">
                     <i class="bi bi-exclamation-triangle-fill"></i> 
                     Выберите фото для удаления (не более {{ group.files|length - 1 }} из {{ group.files|length }})
@@ -190,7 +178,6 @@
         {% endfor %}
     </div>
 </form>
-
 <div class="btn-delete-wrapper" id="final-delete-section" style="display: none;">
     <hr>
     <div class="alert alert-danger">
@@ -205,11 +192,9 @@
     </form>
 </div>
 {% endblock %}
-
 {% block extra_scripts %}
 <script>
     $(document).ready(function() {
-        // Обработка открытия/закрытия EXIF данных
         $('.exif-toggle').on('click', function() {
             let target = $(this).data('bs-target');
             if ($(target).hasClass('show')) {
@@ -218,29 +203,19 @@
                 $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
             }
         });
-        
-        // Проверка количества выбранных чекбоксов в группе
         $('.delete-checkbox').on('change', function() {
             const groupId = $(this).data('group');
             const checkboxes = $(`input[data-group="${groupId}"]:checked`);
             const totalFiles = $(`input[data-group="${groupId}"]`).length;
-            
-            // Если выбраны все файлы в группе, снимаем выбор с текущего
             if (checkboxes.length >= totalFiles) {
                 $(this).prop('checked', false);
                 alert('Нельзя отметить все файлы в группе на удаление. Должен остаться хотя бы один файл.');
                 return;
             }
         });
-        
-        // Проверка наличия отмеченных на удаление файлов
         function checkMarkedFiles() {
-            // Если уже есть файлы, отмеченные в БД
             var hasMarkedFiles = {{ marked_count|default(0) }} > 0;
-            
-            // Если отмечены текущие чекбоксы
             var hasCheckedBoxes = $('.delete-checkbox:checked').length > 0;
-            
             if (hasMarkedFiles || hasCheckedBoxes) {
                 $('#final-delete-section').show();
                 $('#marked-count').text({{ marked_count|default(0) }});
@@ -248,11 +223,7 @@
                 $('#final-delete-section').hide();
             }
         }
-        
-        // Запускаем проверку при загрузке страницы
         checkMarkedFiles();
-        
-        // Обновляем состояние при изменении чекбоксов
         $('.delete-checkbox').on('change', function() {
             checkMarkedFiles();
         });

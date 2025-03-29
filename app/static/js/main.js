@@ -15,22 +15,17 @@ $(document).ready(function() {
         $('.card-body').append('<div class="text-center mt-3"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Загрузка...</span></div><p class="mt-2">Идет сканирование директорий...</p></div>');
         $('button[type="submit"]').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Сканирование...');
     });
-    
     $('input[type="text"]').on('blur', function() {
         if (!$(this).val().trim()) {
             $(this).val('');
         }
     });
-    
     $('input[name^="directory"]').on('input', function() {
         let value = $(this).val().trim();
         if (value && !value.startsWith('//') && !value.startsWith('/')) {
-            // Если путь не начинается с // или /, добавляем //
             $(this).val('//' + value);
         }
     });
-    
-    // Обработчик для кнопок показа/скрытия EXIF данных
     $('.exif-toggle').on('click', function() {
         let target = $(this).data('bs-target');
         if ($(target).hasClass('show')) {
@@ -39,13 +34,9 @@ $(document).ready(function() {
             $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
         }
     });
-    
-    // Подсветка различающихся EXIF полей при наведении
     $('.exif-diff').hover(
         function() {
-            // Получаем индекс строки в таблице
             const tagName = $(this).prev('.exif-tag').text();
-            // Подсвечиваем все поля с таким же именем тега
             $(`.exif-tag`).each(function() {
                 if ($(this).text() === tagName) {
                     $(this).next('.exif-value').addClass('hover-highlight');
@@ -53,7 +44,6 @@ $(document).ready(function() {
             });
         },
         function() {
-            // Снимаем подсветку
             $('.hover-highlight').removeClass('hover-highlight');
         }
     );
