@@ -31,36 +31,21 @@ PhotoDublV.3 - это веб-приложение для поиска и уда�
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/yourusername/photodublv.3.git
-cd photodublv.3
+git clone https://github.com/ktibr0/work_with_duplicates
+cd work_with_duplicates
 ```
 
-2. Создайте и активируйте виртуальное окружение Python:
+2. Перейдите в папку docker:
 ```bash
-python -m venv venv
-source venv/bin/activate  # для Linux/Mac
-venv\Scripts\activate     # для Windows
+cd docker
 ```
 
-3. Установите зависимости:
+3. Запустите контейнер:
 ```bash
-pip install -r requirements.txt
+ docker compose up -d
 ```
 
-4. Убедитесь, что у вас установлен и запущен MongoDB:
-```bash
-# Для Ubuntu
-sudo systemctl status mongodb
-# Если не установлен:
-sudo apt-get install mongodb
-```
-
-5. Запустите приложение:
-```bash
-python run.py
-```
-
-6. Откройте веб-браузер и перейдите по адресу http://localhost:5000
+4. Откройте веб-браузер и перейдите по адресу http://localhost:5000
 
 ### Использование
 
@@ -114,36 +99,21 @@ PhotoDublV.3 is a web application for finding and deleting duplicate photos that
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/photodublv.3.git
-cd photodublv.3
+git clone https://github.com/ktibr0/work_with_duplicates
+cd work_with_duplicates
 ```
 
-2. Create and activate a Python virtual environment:
+2. Go to folder docker:
 ```bash
-python -m venv venv
-source venv/bin/activate  # for Linux/Mac
-venv\Scripts\activate     # for Windows
+cd docker
 ```
 
-3. Install dependencies:
+3. Run container:
 ```bash
-pip install -r requirements.txt
+docker compose up -d
 ```
 
-4. Make sure MongoDB is installed and running:
-```bash
-# For Ubuntu
-sudo systemctl status mongodb
-# If not installed:
-sudo apt-get install mongodb
-```
-
-5. Run the application:
-```bash
-python run.py
-```
-
-6. Open a web browser and go to http://localhost:5000
+4. Open a web browser and go to http://localhost:5000
 
 ### Usage
 
