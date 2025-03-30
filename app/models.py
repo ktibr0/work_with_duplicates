@@ -36,22 +36,25 @@ class Database:
         return len(duplicate_groups)
     def get_session_duplicates(self, session_id):
         return list(self.db.duplicate_groups.find({'session_id': session_id}))
-def save_marked_files(self, session_id, files):
-    result = self.db.marked_files.update_one(
-        {'session_id': session_id},
-        {
-            '$set': {
-                'files': files,
-                'updated_at': datetime.datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
-    return result
-def get_marked_files(self, session_id):
-    doc = self.db.marked_files.find_one({'session_id': session_id})
-    if doc:
-        return doc.get('files', [])
-    return []
-def clear_marked_files(self, session_id):
-    return self.db.marked_files.delete_one({'session_id': session_id})        
+    
+    def save_marked_files(self, session_id, files):
+        result = self.db.marked_files.update_one(
+            {'session_id': session_id},
+            {
+                '$set': {
+                    'files': files,
+                    'updated_at': datetime.datetime.utcnow()
+                }
+            },
+            upsert=True
+        )
+        return result
+        
+    def get_marked_files(self, session_id):
+        doc = self.db.marked_files.find_one({'session_id': session_id})
+        if doc:
+            return doc.get('files', [])
+        return []
+        
+    def clear_marked_files(self, session_id):
+        return self.db.marked_files.delete_one({'session_id': session_id})        

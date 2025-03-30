@@ -39,19 +39,33 @@ def scan_directories():
     db_session_id = db.save_scan_session(directories)
     session['db_session_id'] = str(db_session_id)
     
+    # Сохраняем учетные данные в сессию для последующего использования при удалении
+    if username:
+        session['scan_username'] = username
+    if password:
+        session['scan_password'] = password
+    
     mounted_dirs = []
+    mount_error = False
+    
     try:
         for dir_path in directories:
             if dir_path.startswith('//'):
                 try:
                     mounted_path = samba_mounter.mount_share(dir_path, username, password)
                     mounted_dirs.append(mounted_path)
+                    logger.info(f"Успешно примонтирован {dir_path} к {mounted_path}")
                 except Exception as e:
                     logger.error(f"Ошибка при монтировании {dir_path}: {e}")
                     flash(f'Ошибка при монтировании {dir_path}: {e}', 'danger')
+                    mount_error = True
                     return redirect(url_for('index'))
             else:
                 mounted_dirs.append(dir_path)
+        
+        # Сохраняем информацию о монтировании в базе данных
+        mount_status = samba_mounter.get_mount_status()
+        logger.info(f"Состояние монтирования перед сканированием: {mount_status}")
         
         duplicates = file_scanner.scan_directories(mounted_dirs)
         processed_duplicates = []
@@ -87,10 +101,13 @@ def scan_directories():
         flash(f'Произошла ошибка: {e}', 'danger')
         return redirect(url_for('index'))
     finally:
-        try:
-            samba_mounter.unmount_all()
-        except Exception as e:
-            logger.error(f"Ошибка при размонтировании ресурсов: {e}")
+        # Размонтируем только если была ошибка
+        if mount_error:
+            try:
+                logger.info("Размонтирование ресурсов из-за ошибки")
+                samba_mounter.unmount_all()
+            except Exception as e:
+                logger.error(f"Ошибка при размонтировании ресурсов: {e}")
 
 @app.route('/results/<session_id>')
 def view_results(session_id):
@@ -234,34 +251,206 @@ def delete_files():
             flash('Идентификатор сессии не найден', 'danger')
             return redirect(url_for('index'))
         
+        # Получаем информацию о сессии
+        obj_session_id = ObjectId(session_id)
+        session_info = db.db.scan_sessions.find_one({'_id': obj_session_id})
+        if not session_info:
+            flash('Сессия не найдена', 'danger')
+            return redirect(url_for('index'))
+        
         marked_files_doc = db.db.marked_files.find_one({'session_id': session_id})
         if not marked_files_doc or not marked_files_doc.get('files'):
             flash('Нет файлов, отмеченных на удаление', 'warning')
             return redirect(url_for('view_results', session_id=session_id))
         
         files_to_delete = marked_files_doc.get('files', [])
-        deleted_count = 0
-        error_count = 0
+        deleted_files = []
+        error_files = []
         
-        for file_path in files_to_delete:
+        # Получаем логин и пароль (из формы подтверждения удаления)
+        username = request.form.get('username', '')
+        password = request.form.get('password', '')
+        
+        # Если учетные данные не предоставлены, пробуем взять их из сессии
+        if not username and 'scan_username' in session:
+            username = session.get('scan_username', '')
+            logger.info("Используем имя пользователя из сессии")
+        
+        if not password and 'scan_password' in session:
+            password = session.get('scan_password', '')
+            logger.info("Используем пароль из сессии")
+            
+        logger.info(f"Запрос на удаление {len(files_to_delete)} файлов. Учетные данные: {'Предоставлены' if username else 'Не предоставлены'}")
+        
+        # Проверяем текущее состояние монтирования
+        pre_mount_status = samba_mounter.get_mount_status()
+        logger.info(f"Текущее состояние монтирования: {pre_mount_status}")
+        
+        # Монтируем необходимые Samba-ресурсы перед удалением
+        directories = session_info.get('directories', [])
+        network_dirs = [d for d in directories if d.startswith('//')]
+        
+        logger.info(f"Директории: {directories}")
+        logger.info(f"Сетевые директории: {network_dirs}")
+        
+        samba_mount_success = True
+        mounted_dirs = []
+        
+        try:
+            # Монтируем все сетевые директории, которые еще не примонтированы
+            for dir_path in network_dirs:
+                # Проверяем, не примонтирован ли уже
+                already_mounted = False
+                for share_path in pre_mount_status['mount_points']:
+                    if dir_path.lower() == share_path.lower():
+                        already_mounted = True
+                        mounted_path = pre_mount_status['mount_points'][share_path]['mount_point']
+                        mounted_dirs.append(mounted_path)
+                        logger.info(f"Ресурс {dir_path} уже примонтирован к {mounted_path}")
+                        break
+                
+                if not already_mounted:
+                    try:
+                        logger.info(f"Монтирование сетевого пути: {dir_path}")
+                        mounted_path = samba_mounter.mount_share(dir_path, username, password)
+                        mounted_dirs.append(mounted_path)
+                        logger.info(f"Успешно примонтирован {dir_path} к {mounted_path}")
+                    except Exception as e:
+                        samba_mount_success = False
+                        error_msg = str(e)
+                        logger.error(f"Ошибка при монтировании {dir_path}: {error_msg}")
+                        error_files.append({
+                            'path': dir_path,
+                            'error': f"Не удалось примонтировать: {error_msg}"
+                        })
+            
+            # Отладочная информация о монтировании
+            mount_status = samba_mounter.get_mount_status()
+            logger.info(f"Состояние монтирования после подготовки: {mount_status}")
+            
+            # Применяем маппинг путей к файлам, которые нужно удалить
+            mapped_files = files_to_delete.copy()
+            if mount_status['count'] > 0:
+                # Используем новый метод map_paths для маппинга
+                mapped_files = samba_mounter.map_paths(files_to_delete)
+                logger.info(f"Маппинг путей для удаления: {len(mapped_files)} файлов")
+                
+                # Выводим в лог для отладки
+                for i, (orig, mapped) in enumerate(zip(files_to_delete, mapped_files)):
+                    logger.info(f"Файл {i+1}: {orig} -> {mapped}")
+            
+            # Проверяем существование файлов перед удалением
+            for i, file_path in enumerate(mapped_files):
+                original_path = files_to_delete[i]
+                exists = os.path.exists(file_path)
+                is_file = os.path.isfile(file_path) if exists else False
+                is_writable = os.access(file_path, os.W_OK) if exists else False
+                logger.info(f"Проверка файла {i+1}: {file_path}, существует: {exists}, файл: {is_file}, доступен для записи: {is_writable}")
+            
+            # Удаляем файлы
+            for i, file_path in enumerate(mapped_files):
+                original_path = files_to_delete[i]  # для сохранения в БД используем оригинальный путь
+                try:
+                    logger.info(f"Проверка существования файла: {file_path}")
+                    if os.path.exists(file_path):
+                        if os.path.isfile(file_path):
+                            file_name = os.path.basename(file_path)
+                            file_size = os.path.getsize(file_path)
+                            logger.info(f"Удаление файла: {file_path}")
+                            
+                            # Проверяем права доступа
+                            if os.access(file_path, os.W_OK):
+                                try:
+                                    os.remove(file_path)
+                                    deleted_files.append({
+                                        'path': original_path,  # показываем пользователю оригинальный путь
+                                        'name': file_name,
+                                        'size': file_size
+                                    })
+                                    # Удаляем информацию о файле из группы дубликатов
+                                    db.db.duplicate_groups.update_many(
+                                        {'session_id': session_id, 'files.path': original_path},
+                                        {'$pull': {'files': {'path': original_path}}}
+                                    )
+                                    logger.info(f"Файл успешно удален: {file_path}")
+                                except Exception as rem_err:
+                                    logger.error(f"Ошибка при удалении файла: {file_path}: {rem_err}")
+                                    error_files.append({
+                                        'path': original_path,
+                                        'error': f"Ошибка при удалении: {str(rem_err)}"
+                                    })
+                            else:
+                                logger.error(f"Нет прав на запись: {file_path}")
+                                error_files.append({
+                                    'path': original_path,
+                                    'error': "Нет прав на запись к файлу"
+                                })
+                        else:
+                            logger.error(f"Путь существует, но это не файл: {file_path}")
+                            error_files.append({
+                                'path': original_path,
+                                'error': "Путь существует, но это не файл"
+                            })
+                    else:
+                        logger.error(f"Файл не существует: {file_path}")
+                        error_files.append({
+                            'path': original_path,
+                            'error': "Файл не найден"
+                        })
+                except PermissionError as pe:
+                    logger.error(f"Ошибка доступа при удалении файла {file_path}: {pe}")
+                    error_files.append({
+                        'path': original_path,
+                        'error': f"Ошибка доступа: {str(pe)}"
+                    })
+                except Exception as e:
+                    logger.error(f"Ошибка при удалении файла {file_path}: {e}")
+                    error_files.append({
+                        'path': original_path,
+                        'error': str(e)
+                    })
+            
+            # Очищаем список файлов, отмеченных на удаление только если были успешные удаления
+            if deleted_files:
+                db.db.marked_files.delete_one({'session_id': session_id})
+                session.pop('has_marked_files', None)
+            
+            # Сохраняем результаты удаления в сессию для отображения
+            session['deleted_files'] = deleted_files
+            session['error_files'] = error_files
+            
+            logger.info(f"Результаты удаления: успешно удалено {len(deleted_files)}, ошибок {len(error_files)}")
+            
+            return redirect(url_for('delete_results', session_id=session_id))
+        
+        except Exception as e:
+            import traceback
+            logger.error(f"Необработанная ошибка при удалении файлов: {e}")
+            logger.error(traceback.format_exc())
+            flash(f"Произошла ошибка: {str(e)}", 'danger')
+            return redirect(url_for('view_results', session_id=session_id))
+        finally:
+            # Размонтируем все ресурсы после удаления
             try:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    deleted_count += 1
-                    db.db.duplicate_groups.update_many(
-                        {'session_id': session_id, 'files.path': file_path},
-                        {'$pull': {'files': {'path': file_path}}}
-                    )
+                logger.info("Размонтирование всех ресурсов")
+                unmount_status = samba_mounter.unmount_all()
+                logger.info(f"Результат размонтирования: {unmount_status}")
             except Exception as e:
-                logger.error(f"Ошибка при удалении файла {file_path}: {e}")
-                error_count += 1
-        
-        db.db.marked_files.delete_one({'session_id': session_id})
-        session.pop('has_marked_files', None)
-        
-        if deleted_count > 0:
-            flash(f'Успешно удалено файлов: {deleted_count}', 'success')
-        if error_count > 0:
-            flash(f'Не удалось удалить файлов: {error_count}', 'danger')
-        
-        return redirect(url_for('view_results', session_id=session_id))
+                logger.error(f"Ошибка при размонтировании ресурсов: {e}")
+
+@app.route('/delete_results/<session_id>')
+def delete_results(session_id):
+    deleted_files = session.pop('deleted_files', [])
+    error_files = session.pop('error_files', [])
+    
+    total_deleted = len(deleted_files)
+    total_size = sum(file.get('size', 0) for file in deleted_files)
+    total_errors = len(error_files)
+    
+    return render_template('delete_results.html', 
+                           session_id=session_id,
+                           deleted_files=deleted_files,
+                           error_files=error_files,
+                           total_deleted=total_deleted,
+                           total_size=total_size,
+                           total_errors=total_errors)

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block extra_head %}
+<style>
+    .deleted-file {
+        padding: 8px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    .deleted-file:last-child {
+        border-bottom: none;
+    }
+    .file-name {
+        font-weight: bold;
+    }
+    .file-path {
+        font-size: 0.85rem;
+        color: #6c757d;
+        word-break: break-all;
+    }
+    .file-size {
+        font-size: 0.85rem;
+    }
+    .error-file {
+        padding: 8px;
+        border-bottom: 1px solid #e9ecef;
+        background-color: #fff8f8;
+    }
+    .error-file:last-child {
+        border-bottom: none;
+    }
+    .error-message {
+        color: #dc3545;
+        font-size: 0.85rem;
+    }
+    .success-icon {
+        color: #198754;
+        font-size: 1.2rem;
+    }
+    .error-icon {
+        color: #dc3545;
+        font-size: 1.2rem;
+    }
+    .results-summary {
+        margin-bottom: 20px;
+    }
+    .results-card {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2><i class="bi bi-trash"></i> Результаты удаления</h2>
+        <div class="results-summary">
+            <div class="alert {% if total_deleted > 0 %}alert-success{% else %}alert-warning{% endif %}">
+                <h4><i class="bi bi-check-circle-fill"></i> Удаление завершено</h4>
+                <p>Успешно удалено: <strong>{{ total_deleted }}</strong> файлов.</p>
+                <p>Общий размер удаленных файлов: <strong>{{ (total_size / 1024 / 1024)|round(2) }} МБ</strong></p>
+                {% if total_errors > 0 %}
+                <p class="text-danger">Не удалось удалить: <strong>{{ total_errors }}</strong> файлов.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="d-flex">
+            <a href="{{ url_for('view_results', session_id=session_id) }}" class="btn btn-secondary me-2">
+                <i class="bi bi-arrow-left"></i> Вернуться к результатам
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                <i class="bi bi-house"></i> На главную
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {# Фильтруем ошибки монтирования и файловые ошибки #}
+    {% if error_files %}
+    <!-- Ошибки монтирования -->
+    {% set mount_error_count = 0 %}
+    <div class="col-md-12 mt-4">
+        <div class="card results-card">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="bi bi-hdd-network"></i> Ошибки при монтировании сетевых ресурсов</h5>
+            </div>
+            <div class="card-body p-3">
+                <div class="alert alert-warning">
+                    <p><i class="bi bi-exclamation-triangle-fill"></i> Возможные причины ошибок монтирования:</p>
+                    <ul>
+                        <li>Неверное имя пользователя или пароль</li>
+                        <li>Недостаточно прав доступа для записи</li>
+                        <li>Сетевой ресурс недоступен</li>
+                    </ul>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for file in error_files %}
+                        {% if "Не удалось примонтировать" in file.error %}
+                            {% set mount_error_count = mount_error_count + 1 %}
+                            <div class="error-file">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-2">
+                                        <i class="bi bi-x-circle-fill error-icon"></i>
+                                    </div>
+                                    <div>
+                                        <div class="file-path">{{ file.path }}</div>
+                                        <div class="error-message">Ошибка: {{ file.error }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% if mount_error_count == 0 %}
+                <div class="p-3 text-center">
+                    <p class="text-muted">Нет ошибок монтирования</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if deleted_files %}
+    <div class="col-md-12">
+        <div class="card results-card">
+            <div class="card-header">
+                <h5><i class="bi bi-check-circle"></i> Успешно удаленные файлы ({{ total_deleted }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for file in deleted_files %}
+                    <div class="deleted-file">
+                        <div class="d-flex align-items-start">
+                            <div class="me-2">
+                                <i class="bi bi-check-circle-fill success-icon"></i>
+                            </div>
+                            <div>
+                                <div class="file-name">{{ file.name }}</div>
+                                <div class="file-path">{{ file.path }}</div>
+                                <div class="file-size">Размер: {{ (file.size / 1024)|round(2) }} KB</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if error_files %}
+    <!-- Ошибки удаления файлов -->
+    {% set file_error_count = 0 %}
+    <div class="col-md-12 mt-4">
+        <div class="card results-card">
+            <div class="card-header bg-danger text-white">
+                <h5><i class="bi bi-exclamation-triangle"></i> Ошибки при удалении файлов</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for file in error_files %}
+                        {% if "Не удалось примонтировать" not in file.error %}
+                            {% set file_error_count = file_error_count + 1 %}
+                            <div class="error-file">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-2">
+                                        <i class="bi bi-x-circle-fill error-icon"></i>
+                                    </div>
+                                    <div>
+                                        <div class="file-path">{{ file.path }}</div>
+                                        <div class="error-message">Ошибка: {{ file.error }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% if file_error_count == 0 %}
+                <div class="p-3 text-center">
+                    <p class="text-muted">Нет ошибок удаления файлов</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

@@ -79,6 +79,9 @@
         color: #dc3545;
         margin-top: 5px;
     }
+    .delete-spinner {
+        display: none;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -184,49 +187,127 @@
         <h4><i class="bi bi-exclamation-triangle-fill"></i> Внимание!</h4>
         <p>Вы отметили <span id="marked-count">0</span> файлов на удаление. Это действие невозможно отменить.</p>
     </div>
-    <form id="delete-form" method="POST" action="{{ url_for('delete_files') }}">
-        <input type="hidden" name="session_id" value="{{ session_id }}">
-        <button type="submit" class="btn btn-danger">
-            <i class="bi bi-trash"></i> Удалить отмеченные файлы безвозвратно
-        </button>
-    </form>
+    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal">
+        <i class="bi bi-trash"></i> Удалить отмеченные файлы безвозвратно
+    </button>
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmDeleteModalLabel"><i class="bi bi-exclamation-triangle-fill"></i> Подтверждение удаления</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы уверены, что хотите удалить <span id="confirm-count"></span> отмеченных файлов?</p>
+                <p class="fw-bold">Это действие нельзя отменить!</p>
+                
+                {% set has_network_dirs = false %}
+                {% for dir in directories %}
+                    {% if dir.startswith('//') %}
+                        {% set has_network_dirs = true %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if has_network_dirs %}
+                <div class="network-credentials mt-3">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-wifi"></i> Для удаления файлов с сетевых ресурсов укажите учетные данные:
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Имя пользователя</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="Имя пользователя для доступа к сетевым ресурсам">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Пароль для доступа к сетевым ресурсам">
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <form id="delete-form" method="POST" action="{{ url_for('delete_files') }}">
+                    <input type="hidden" name="session_id" value="{{ session_id }}">
+                    
+                    {% if has_network_dirs %}
+                    <input type="hidden" name="username" id="hidden-username">
+                    <input type="hidden" name="password" id="hidden-password">
+                    {% endif %}
+                    
+                    <button type="submit" id="confirm-delete-btn" class="btn btn-danger">
+                        <span class="delete-btn-text"><i class="bi bi-trash"></i> Удалить безвозвратно</span>
+                        <span class="spinner-border spinner-border-sm delete-spinner"></span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 {% block extra_scripts %}
 <script>
-    $(document).ready(function() {
-        $('.exif-toggle').on('click', function() {
-            let target = $(this).data('bs-target');
-            if ($(target).hasClass('show')) {
-                $(this).html('<i class="bi bi-info-circle"></i> Показать EXIF данные');
-            } else {
-                $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
-            }
-        });
-        $('.delete-checkbox').on('change', function() {
-            const groupId = $(this).data('group');
-            const checkboxes = $(`input[data-group="${groupId}"]:checked`);
-            const totalFiles = $(`input[data-group="${groupId}"]`).length;
-            if (checkboxes.length >= totalFiles) {
-                $(this).prop('checked', false);
-                alert('Нельзя отметить все файлы в группе на удаление. Должен остаться хотя бы один файл.');
-                return;
-            }
-        });
-        function checkMarkedFiles() {
-            var hasMarkedFiles = {{ marked_count|default(0) }} > 0;
-            var hasCheckedBoxes = $('.delete-checkbox:checked').length > 0;
-            if (hasMarkedFiles || hasCheckedBoxes) {
-                $('#final-delete-section').show();
-                $('#marked-count').text({{ marked_count|default(0) }});
-            } else {
-                $('#final-delete-section').hide();
-            }
+$(document).ready(function() {
+    // Переключение видимости EXIF данных
+    $('.exif-toggle').on('click', function() {
+        var target = $(this).data('bs-target');
+        if ($(target).hasClass('show')) {
+            $(this).html('<i class="bi bi-info-circle"></i> Показать EXIF данные');
+        } else {
+            $(this).html('<i class="bi bi-info-circle-fill"></i> Скрыть EXIF данные');
         }
-        checkMarkedFiles();
-        $('.delete-checkbox').on('change', function() {
-            checkMarkedFiles();
-        });
     });
+    
+    // Проверка, что не отмечаются все файлы в группе
+    $('.delete-checkbox').on('change', function() {
+        var groupId = $(this).data('group');
+        var checkboxes = $('input[data-group="' + groupId + '"]:checked');
+        var totalFiles = $('input[data-group="' + groupId + '"]').length;
+        
+        if (checkboxes.length >= totalFiles) {
+            $(this).prop('checked', false);
+            alert('Нельзя отметить все файлы в группе на удаление. Должен остаться хотя бы один файл.');
+        }
+        
+        updateMarkedFilesCount();
+    });
+    
+    // Обновление счетчика отмеченных файлов
+    function updateMarkedFilesCount() {
+        var markedCount = {{ marked_count|default(0) }};
+        var checkedCount = $('.delete-checkbox:checked').length;
+        var totalCount = Math.max(markedCount, checkedCount);
+        
+        if (totalCount > 0) {
+            $('#final-delete-section').show();
+            $('#marked-count').text(totalCount);
+            $('#confirm-count').text(totalCount);
+        } else {
+            $('#final-delete-section').hide();
+        }
+    }
+    
+    // Инициализация счетчика
+    updateMarkedFilesCount();
+    
+    // Обработка формы удаления
+    $('#delete-form').on('submit', function(e) {
+        // Если есть поля для учетных данных, копируем их значения в скрытые поля
+        if ($('#username').length > 0 && $('#password').length > 0) {
+            $('#hidden-username').val($('#username').val());
+            $('#hidden-password').val($('#password').val());
+        }
+        
+        // Показываем анимацию загрузки
+        $('.delete-btn-text').hide();
+        $('.delete-spinner').show();
+        $('#confirm-delete-btn').prop('disabled', true);
+        
+        // Продолжаем отправку формы
+        return true;
+    });
+});
 </script>
 {% endblock %}
