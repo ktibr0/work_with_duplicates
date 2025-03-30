@@ -12,7 +12,7 @@ PhotoDubl - это веб-приложение для поиска и удале
 - Автоматическое монтирование сетевых ресурсов
 - Поиск идентичных фотографий на основе имени файла
 - Анализ и сравнение EXIF-метаданных
-- Подсветка различий в метаданных для принятия решения
+- Подсветка различий в метаданных для принятия решения (в работе)
 - Возможность отметить файлы для удаления
 - Безопасное удаление отмеченных дубликатов
 - Детальный отчет о результатах удаления
@@ -80,7 +80,7 @@ PhotoDubl is a web application for finding and deleting duplicate photos that ca
 - Automatic mounting of network resources
 - Find identical photos based on filename
 - Analyze and compare EXIF metadata
-- Highlight differences in metadata to help decision making
+- Highlight differences in metadata to help decision making (WIP)
 - Mark files for deletion
 - Safely delete marked duplicates
 - Detailed deletion results report
